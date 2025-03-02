@@ -2,6 +2,7 @@
 using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Buffs;
+using System.Reflection;
 
 namespace StackableBuffs
 {
@@ -9,11 +10,13 @@ namespace StackableBuffs
 	{
 		private static Harmony HarmonyInstance;
 
-		private static bool BuffWasAlreadyApplied;
+		private static readonly Dictionary<long, bool> BuffWasAlreadyApplied = new();
 
-		private static readonly Dictionary<string, int> DefaultBuffLengths = new();
+		private static readonly Dictionary<long, Dictionary<string, int>> DefaultBuffLengths = new();
 
-		private static readonly Dictionary<string, int> BuffLengthExtensions = new();
+		private static readonly Dictionary<long, Dictionary<string, int>> BuffLengthExtensions = new();
+
+		private static readonly FieldInfo BuffManager_Player = typeof(BuffManager).GetField("Player", BindingFlags.Instance | BindingFlags.NonPublic);
 
 		public override void Entry(IModHelper helper)
 		{
@@ -36,33 +39,54 @@ namespace StackableBuffs
 
 		private static void Apply_PrefixPatch(BuffManager __instance, Buff buff)
 		{
-			if (!DefaultBuffLengths.ContainsKey(buff.id))
-				DefaultBuffLengths[buff.id] = buff.totalMillisecondsDuration;
+			var player = (Farmer)BuffManager_Player.GetValue(__instance);
+			if (!DefaultBuffLengths.ContainsKey(player.UniqueMultiplayerID))
+			{
+				DefaultBuffLengths.Add(player.UniqueMultiplayerID, new Dictionary<string, int>
+				{
+					{ buff.id, buff.totalMillisecondsDuration }
+				});
+			}
+			else if(!DefaultBuffLengths[player.UniqueMultiplayerID].ContainsKey(buff.id))
+			{
+				DefaultBuffLengths[player.UniqueMultiplayerID][buff.id] = buff.totalMillisecondsDuration;
+			}
 
-			if (!BuffLengthExtensions.ContainsKey(buff.id))
-				BuffLengthExtensions[buff.id] = 1;
+			if (!BuffLengthExtensions.ContainsKey(player.UniqueMultiplayerID))
+			{
+				BuffLengthExtensions.Add(player.UniqueMultiplayerID, new Dictionary<string, int>
+				{
+					{ buff.id, 1 }
+				});
+			}
+			else if(!BuffLengthExtensions[player.UniqueMultiplayerID].ContainsKey(buff.id))
+			{
+				BuffLengthExtensions[player.UniqueMultiplayerID][buff.id] = 1;
+			}
 
-			BuffWasAlreadyApplied = __instance.IsApplied(buff.id);
+			BuffWasAlreadyApplied[player.UniqueMultiplayerID] = __instance.IsApplied(buff.id);
 		}
 
-		private static void Apply_PostfixPatch(Buff buff)
+		private static void Apply_PostfixPatch(BuffManager __instance, Buff buff)
 		{
-			if (BuffWasAlreadyApplied)
+			var player = (Farmer)BuffManager_Player.GetValue(__instance);
+
+			if (BuffWasAlreadyApplied[player.UniqueMultiplayerID])
 			{
-				var defaultLength = DefaultBuffLengths[buff.id];
+				var defaultLength = DefaultBuffLengths[player.UniqueMultiplayerID][buff.id];
 
 				// Increase the extension count of the currrent buff, capping out at 4 extensions.
-				BuffLengthExtensions[buff.id] = Math.Clamp(BuffLengthExtensions[buff.id] + 1, 0, 4);
-				var currentBuffExtension = BuffLengthExtensions[buff.id];
+				BuffLengthExtensions[player.UniqueMultiplayerID][buff.id] = Math.Clamp(BuffLengthExtensions[player.UniqueMultiplayerID][buff.id] + 1, 0, 4);
+				var currentBuffExtension = BuffLengthExtensions[player.UniqueMultiplayerID][buff.id];
 
 				buff.totalMillisecondsDuration = currentBuffExtension * defaultLength;
 				buff.millisecondsDuration = currentBuffExtension * defaultLength;
 
-				BuffWasAlreadyApplied = false;
+				BuffWasAlreadyApplied[player.UniqueMultiplayerID] = false;
 			}
 			// Reset the buff extension count if this buff is being applied, not reapplied.
 			else
-				BuffLengthExtensions[buff.id] = 1;
+				BuffLengthExtensions[player.UniqueMultiplayerID][buff.id] = 1;
 		}
 	}
 }
