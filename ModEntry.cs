@@ -6,7 +6,11 @@ using System.Reflection;
 
 namespace StackableBuffs
 {
-	public class ModEntry : Mod
+	// Note that, due to how this works, you can apply a buff to the max stacks, let it get down to almost 0, then reapply it to jump
+	// back up to the extended 4 stacks timer. I don't see this has a major issue though, as the days in stardew aren't terribly long.
+	// TODO: Fix at some point in the future by jumping into the buff update code, and keeping track of whereabouts in what extension
+	// timer ranges the buff is, and updating the stored extension to match that. Not urgent.
+	public sealed class ModEntry : Mod
 	{
 		private static Harmony HarmonyInstance;
 
@@ -40,6 +44,9 @@ namespace StackableBuffs
 		private static void Apply_PrefixPatch(BuffManager __instance, Buff buff)
 		{
 			var player = (Farmer)BuffManager_Player.GetValue(__instance);
+
+			// Initialize and store the default length for each buff. This should not need to be per player, however it was tested in multiplayer
+			// with this, so safe over sorry.
 			if (!DefaultBuffLengths.ContainsKey(player.UniqueMultiplayerID))
 			{
 				DefaultBuffLengths.Add(player.UniqueMultiplayerID, new Dictionary<string, int>
@@ -52,6 +59,7 @@ namespace StackableBuffs
 				DefaultBuffLengths[player.UniqueMultiplayerID][buff.id] = buff.totalMillisecondsDuration;
 			}
 
+			// Initialize and store  the amount of extensions on the current buff.
 			if (!BuffLengthExtensions.ContainsKey(player.UniqueMultiplayerID))
 			{
 				BuffLengthExtensions.Add(player.UniqueMultiplayerID, new Dictionary<string, int>
@@ -64,6 +72,7 @@ namespace StackableBuffs
 				BuffLengthExtensions[player.UniqueMultiplayerID][buff.id] = 1;
 			}
 
+			// Store whether the buff was already applied. Could also be done by passing a state to the postfix?
 			BuffWasAlreadyApplied[player.UniqueMultiplayerID] = __instance.IsApplied(buff.id);
 		}
 
@@ -71,6 +80,7 @@ namespace StackableBuffs
 		{
 			var player = (Farmer)BuffManager_Player.GetValue(__instance);
 
+			// Only try and add an extension if the buff was already applied.
 			if (BuffWasAlreadyApplied[player.UniqueMultiplayerID])
 			{
 				var defaultLength = DefaultBuffLengths[player.UniqueMultiplayerID][buff.id];
@@ -84,9 +94,11 @@ namespace StackableBuffs
 
 				BuffWasAlreadyApplied[player.UniqueMultiplayerID] = false;
 			}
-			// Reset the buff extension count if this buff is being applied, not reapplied.
+			// Reset the buff extension count if this buff was not already applied.
 			else
+			{
 				BuffLengthExtensions[player.UniqueMultiplayerID][buff.id] = 1;
+			}
 		}
 	}
 }
