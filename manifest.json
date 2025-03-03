@@ -1,10 +1,10 @@
 {
     "Name": "StackableBuffs",
     "Author": "Immy",
-    "Version": "1.0.0",
+    "Version": "1.0.1",
     "Description": "Allows buff durations to stack up to 4 times the default length upon reapplying the buff.",
     "UniqueID": "Immy.StackableBuffs",
     "EntryDll": "StackableBuffs.dll",
     "MinimumApiVersion": "4.0.0",
-    "UpdateKeys": []
+    "UpdateKeys": [ "Nexus:32055" ]
 }
